@@ -1,0 +1,78 @@
+---
+# PNETLab Ingress
+# Acesso via hostname (requer Ingress Controller instalado)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pnetlab-ingress
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: ingress
+  annotations:
+    # Nginx Ingress Controller
+    nginx.ingress.kubernetes.io/proxy-body-size: "10g"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/websocket-services: "pnetlab"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    
+    # Sticky sessions (importante para PNETLab)
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-name: "PNETLAB_AFFINITY"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    
+    # SSL redirect (descomente se usar TLS)
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Traefik (alternativa)
+    # traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    # traefik.ingress.kubernetes.io/router.middlewares: default-headers@kubernetescrd
+spec:
+  ingressClassName: nginx  # Altere para seu Ingress Controller
+  
+  # TLS Configuration (descomente para HTTPS)
+  # tls:
+  #   - hosts:
+  #       - pnetlab.local
+  #       - pnetlab.seu-dominio.com
+  #     secretName: pnetlab-tls-secret
+  
+  rules:
+    # Acesso via hostname local
+    - host: pnetlab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pnetlab
+                port:
+                  number: 80
+    
+    # Acesso via IP (sem hostname)
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pnetlab
+                port:
+                  number: 80
+---
+# IngressClass (se necessário criar)
+# apiVersion: networking.k8s.io/v1
+# kind: IngressClass
+# metadata:
+#   name: nginx
+#   annotations:
+#     ingressclass.kubernetes.io/is-default-class: "true"
+# spec:
+#   controller: k8s.io/ingress-nginx

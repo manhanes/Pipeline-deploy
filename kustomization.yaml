@@ -1,0 +1,46 @@
+---
+# Kustomization para PNETLab
+# Use: kubectl apply -k .
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: pnetlab-deployment
+  annotations:
+    description: "PNETLab Network Lab Platform para Kubernetes"
+
+# Namespace para todos os recursos
+namespace: pnetlab
+
+# Recursos na ordem de aplicação
+resources:
+  - 00-namespace.yaml
+  - 01-storage.yaml
+  - 02-configmap.yaml
+  - 03-secrets.yaml
+  - 04-rbac.yaml
+  - 05-deployment.yaml
+  - 06-services.yaml
+  - 07-ingress.yaml
+  - 08-network-policy.yaml
+  - 09-resource-management.yaml
+
+# Labels comuns
+commonLabels:
+  app.kubernetes.io/name: pnetlab
+  app.kubernetes.io/instance: production
+  app.kubernetes.io/managed-by: kustomize
+
+# Annotations comuns
+commonAnnotations:
+  app.kubernetes.io/version: "5.3.11"
+
+# Imagens (para facilitar updates)
+images:
+  - name: ubuntu
+    newTag: "22.04"
+
+# Configurações que podem ser sobrescritas
+# Em ambiente de produção, crie um overlay
+# patches:
+#   - path: patches/production-resources.yaml

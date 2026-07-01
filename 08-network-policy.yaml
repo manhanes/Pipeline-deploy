@@ -1,0 +1,95 @@
+---
+# PNETLab Network Policies
+# Regras de firewall para o namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pnetlab-allow-ingress
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: pnetlab
+  policyTypes:
+    - Ingress
+  ingress:
+    # Permitir tráfego HTTP/HTTPS de qualquer origem
+    - ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    # Permitir tráfego de consoles (portas altas)
+    - ports:
+        - protocol: TCP
+          port: 32768
+        - protocol: TCP
+          port: 32769
+        - protocol: TCP
+          port: 5900
+        - protocol: TCP
+          port: 5901
+    # Permitir tráfego do mesmo namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pnetlab
+    # Permitir tráfego do Ingress Controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+---
+# Política de Egress (saída)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pnetlab-allow-egress
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: pnetlab
+  policyTypes:
+    - Egress
+  egress:
+    # Permitir DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Permitir HTTP/HTTPS para downloads de imagens
+    - ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    # Permitir acesso ao PNETLab Store
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+    # Permitir tráfego interno do cluster
+    - to:
+        - namespaceSelector: {}
+---
+# Default deny para outros pods no namespace (opcional - segurança extra)
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: default-deny-all
+#   namespace: pnetlab
+# spec:
+#   podSelector: {}
+#   policyTypes:
+#     - Ingress
+#     - Egress

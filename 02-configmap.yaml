@@ -1,0 +1,59 @@
+---
+# PNETLab ConfigMap
+# Configurações customizáveis do ambiente
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pnetlab-config
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: config
+data:
+  # Configurações do Apache/Web
+  APACHE_RUN_USER: "www-data"
+  APACHE_RUN_GROUP: "www-data"
+  
+  # Configurações do PNETLab
+  PNETLAB_MODE: "online"  # online ou offline
+  
+  # Timezone
+  TZ: "America/Sao_Paulo"
+  
+  # Configurações de rede
+  MANAGEMENT_NETWORK: "192.168.0.0/24"
+  
+  # Limites de recursos por lab
+  MAX_NODES_PER_LAB: "50"
+  MAX_CONCURRENT_LABS: "10"
+  
+  # Script de inicialização customizado
+  init-script.sh: |
+    #!/bin/bash
+    set -e
+    
+    echo "=== PNETLab Kubernetes Init Script ==="
+    
+    # Configurar timezone
+    ln -snf /usr/share/zoneinfo/${TZ:-America/Sao_Paulo} /etc/localtime
+    
+    # Garantir permissões corretas
+    chown -R www-data:www-data /opt/unetlab/data/Logs 2>/dev/null || true
+    chown -R www-data:www-data /opt/unetlab/labs 2>/dev/null || true
+    
+    # Verificar KVM
+    if [ -e /dev/kvm ]; then
+        echo "KVM disponível"
+        chmod 666 /dev/kvm
+    else
+        echo "AVISO: KVM não disponível - nested virtualization necessário"
+    fi
+    
+    # Verificar /dev/net/tun
+    if [ ! -e /dev/net/tun ]; then
+        mkdir -p /dev/net
+        mknod /dev/net/tun c 10 200
+        chmod 666 /dev/net/tun
+    fi
+    
+    echo "=== Inicialização concluída ==="

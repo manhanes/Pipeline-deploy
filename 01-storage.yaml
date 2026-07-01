@@ -1,0 +1,66 @@
+---
+# PNETLab Persistent Volume Claims
+# Garante que labs, imagens e configurações sejam permanentes
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pnetlab-data
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path  # Altere conforme seu StorageClass
+  resources:
+    requests:
+      storage: 100Gi  # Espaço para imagens QEMU/Docker
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pnetlab-labs
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 50Gi  # Espaço para labs (.unl files)
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pnetlab-config
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi  # Configurações do sistema
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pnetlab-tmp
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi  # Arquivos temporários de execução

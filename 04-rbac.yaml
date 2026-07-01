@@ -1,0 +1,52 @@
+---
+# PNETLab ServiceAccount
+# Conta de serviço dedicada para o pod
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pnetlab-sa
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: rbac
+---
+# Role com permissões necessárias
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pnetlab-role
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: rbac
+rules:
+  # Permissão para gerenciar pods (se necessário para labs dinâmicos)
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/exec"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Permissão para ConfigMaps e Secrets
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  # Permissão para eventos
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pnetlab-rolebinding
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: rbac
+subjects:
+  - kind: ServiceAccount
+    name: pnetlab-sa
+    namespace: pnetlab
+roleRef:
+  kind: Role
+  name: pnetlab-role
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,11 @@
+---
+# PNETLab Kubernetes Namespace
+# Isola todos os recursos do PNETLab em um namespace dedicado
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: network-lab
+    app.kubernetes.io/managed-by: kubectl

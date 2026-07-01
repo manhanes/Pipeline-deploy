@@ -1,0 +1,79 @@
+---
+# PNETLab PodDisruptionBudget
+# Garante disponibilidade durante manutenções
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pnetlab-pdb
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: availability
+spec:
+  # Mínimo de pods disponíveis (0 permite disruption total se necessário)
+  minAvailable: 0
+  # Ou use maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pnetlab
+      app.kubernetes.io/component: server
+---
+# ResourceQuota para o namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: pnetlab-quota
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: quota
+spec:
+  hard:
+    # Limites de recursos
+    requests.cpu: "10"
+    requests.memory: "32Gi"
+    limits.cpu: "16"
+    limits.memory: "64Gi"
+    
+    # Limites de storage
+    requests.storage: "500Gi"
+    persistentvolumeclaims: "10"
+    
+    # Limites de objetos
+    pods: "5"
+    services: "10"
+    secrets: "20"
+    configmaps: "20"
+---
+# LimitRange para defaults de recursos
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pnetlab-limits
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: limits
+spec:
+  limits:
+    # Defaults para containers
+    - type: Container
+      default:
+        cpu: "2"
+        memory: "4Gi"
+      defaultRequest:
+        cpu: "500m"
+        memory: "1Gi"
+      max:
+        cpu: "16"
+        memory: "32Gi"
+      min:
+        cpu: "100m"
+        memory: "256Mi"
+    
+    # Limites para PVCs
+    - type: PersistentVolumeClaim
+      max:
+        storage: "200Gi"
+      min:
+        storage: "1Gi"

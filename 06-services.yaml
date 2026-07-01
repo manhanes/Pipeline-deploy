@@ -1,0 +1,169 @@
+---
+# PNETLab Services
+# Expõe o PNETLab para acesso na rede local
+
+# ClusterIP Service (interno)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pnetlab
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: server
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
+---
+# NodePort Service (acesso via IP do Node)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pnetlab-nodeport
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: service
+  annotations:
+    # Anotações úteis para monitoramento
+    description: "PNETLab Web Interface via NodePort"
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: server
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30080  # Acesse via http://<node-ip>:30080
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 443
+      nodePort: 30443  # Acesse via https://<node-ip>:30443
+      protocol: TCP
+  # Importante: sessionAffinity para manter sessão no mesmo pod
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 horas
+---
+# LoadBalancer Service (para ambientes cloud ou MetalLB)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pnetlab-lb
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: service
+  annotations:
+    # MetalLB - descomente e configure o IP desejado
+    # metallb.universe.tf/address-pool: default
+    # metallb.universe.tf/loadBalancerIPs: 192.168.1.100
+    
+    # Para AWS ELB
+    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    
+    # Para GCP
+    # cloud.google.com/load-balancer-type: "Internal"
+    
+    # Para Azure
+    # service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    {}
+spec:
+  type: LoadBalancer
+  # IP externo fixo (configure conforme seu ambiente)
+  # loadBalancerIP: 192.168.1.100
+  selector:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: server
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  # Permitir tráfego externo direto ao pod
+  externalTrafficPolicy: Local
+---
+# Headless Service (para DNS direto ao pod)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pnetlab-headless
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: service
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: server
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+    - name: https
+      port: 443
+      targetPort: 443
+---
+# Service para Consoles (portas altas para telnet/VNC dos dispositivos)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pnetlab-consoles
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: consoles
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: server
+  ports:
+    # Range de portas para consoles telnet (32768-32900)
+    - name: console-1
+      port: 32768
+      targetPort: 32768
+      nodePort: 32768
+      protocol: TCP
+    - name: console-2
+      port: 32769
+      targetPort: 32769
+      nodePort: 32769
+      protocol: TCP
+    # VNC ports (5900+)
+    - name: vnc-1
+      port: 5900
+      targetPort: 5900
+      nodePort: 30590
+      protocol: TCP
+    - name: vnc-2
+      port: 5901
+      targetPort: 5901
+      nodePort: 30591
+      protocol: TCP
