@@ -1,0 +1,309 @@
+---
+# PNETLab Deployment
+# Deployment principal com nested virtualization support
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pnetlab
+  namespace: pnetlab
+  labels:
+    app.kubernetes.io/name: pnetlab
+    app.kubernetes.io/component: server
+    app.kubernetes.io/version: "5.3.11"
+spec:
+  replicas: 1  # PNETLab deve rodar como singleton
+  strategy:
+    type: Recreate  # Não usar RollingUpdate por causa dos volumes
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pnetlab
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pnetlab
+        app.kubernetes.io/component: server
+      annotations:
+        # Prometheus metrics (se aplicável)
+        prometheus.io/scrape: "false"
+    spec:
+      serviceAccountName: pnetlab-sa
+      
+      # Node selector - rode apenas em nodes com nested virtualization
+      nodeSelector:
+        # Descomente e ajuste conforme seus nodes
+        # kubernetes.io/arch: amd64
+        # node.kubernetes.io/instance-type: your-instance-type
+        {}
+      
+      # Tolerations para nodes específicos (opcional)
+      tolerations: []
+      
+      # Affinity rules
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+      
+      # Security Context do Pod
+      securityContext:
+        fsGroup: 33  # www-data group
+      
+      # Init Container para preparar o ambiente
+      initContainers:
+        - name: init-permissions
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Configurando permissões..."
+              mkdir -p /data/images /data/labs /data/tmp /data/config
+              chmod -R 775 /data
+              chown -R 33:33 /data
+              echo "Permissões configuradas"
+          volumeMounts:
+            - name: pnetlab-data
+              mountPath: /data/images
+            - name: pnetlab-labs
+              mountPath: /data/labs
+            - name: pnetlab-tmp
+              mountPath: /data/tmp
+            - name: pnetlab-config
+              mountPath: /data/config
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+      
+      containers:
+        - name: pnetlab
+          # Usando Ubuntu como base - PNETLab é instalado sobre Ubuntu
+          # Em produção, você precisará de uma imagem customizada com PNETLab
+          image: ubuntu:22.04
+          imagePullPolicy: IfNotPresent
+          
+          # Command para manter o container rodando
+          # Em produção, use uma imagem com PNETLab pré-instalado
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "=== PNETLab Container Starting ==="
+              
+              # Instalar dependências básicas se necessário
+              apt-get update && apt-get install -y \
+                apache2 \
+                php \
+                php-mysql \
+                php-xml \
+                php-curl \
+                php-zip \
+                libapache2-mod-php \
+                qemu-kvm \
+                qemu-utils \
+                bridge-utils \
+                iproute2 \
+                net-tools \
+                curl \
+                wget \
+                supervisor \
+                2>/dev/null || true
+              
+              # Verificar se KVM está disponível
+              if [ -e /dev/kvm ]; then
+                echo "KVM: Disponível"
+                chmod 666 /dev/kvm
+              else
+                echo "AVISO: KVM não detectado"
+              fi
+              
+              # Configurar /dev/net/tun
+              if [ ! -e /dev/net/tun ]; then
+                mkdir -p /dev/net
+                mknod /dev/net/tun c 10 200 2>/dev/null || true
+              fi
+              chmod 666 /dev/net/tun 2>/dev/null || true
+              
+              # Iniciar Apache em foreground para testes
+              echo "Iniciando Apache..."
+              apache2ctl -D FOREGROUND
+          
+          # Portas expostas
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+            - name: https
+              containerPort: 443
+              protocol: TCP
+            - name: telnet
+              containerPort: 23
+              protocol: TCP
+            - name: ssh
+              containerPort: 22
+              protocol: TCP
+            # Portas para consoles de dispositivos (range dinâmico)
+            - name: console-start
+              containerPort: 32768
+              protocol: TCP
+            - name: vnc-start
+              containerPort: 5900
+              protocol: TCP
+          
+          # Variáveis de ambiente
+          envFrom:
+            - configMapRef:
+                name: pnetlab-config
+            - secretRef:
+                name: pnetlab-secrets
+          
+          env:
+            - name: DEBIAN_FRONTEND
+              value: "noninteractive"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          
+          # Recursos
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "8"
+              memory: "16Gi"
+              # Para usar GPU (se aplicável)
+              # nvidia.com/gpu: "1"
+          
+          # Volume Mounts
+          volumeMounts:
+            # Dados principais (imagens QEMU/Docker)
+            - name: pnetlab-data
+              mountPath: /opt/unetlab/addons
+            # Labs
+            - name: pnetlab-labs
+              mountPath: /opt/unetlab/labs
+            # Configurações
+            - name: pnetlab-config
+              mountPath: /opt/unetlab/data
+            # Arquivos temporários
+            - name: pnetlab-tmp
+              mountPath: /opt/unetlab/tmp
+            # Device mounts para virtualização
+            - name: dev-kvm
+              mountPath: /dev/kvm
+            - name: dev-net-tun
+              mountPath: /dev/net/tun
+            # Shared memory para QEMU
+            - name: shm
+              mountPath: /dev/shm
+            # Cgroups (necessário para containers dentro do pod)
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+              readOnly: true
+          
+          # Security Context do Container
+          securityContext:
+            privileged: true  # NECESSÁRIO para KVM/QEMU
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+                - SYS_ADMIN
+                - SYS_RESOURCE
+                - SYS_PTRACE
+                - MKNOD
+                - NET_BROADCAST
+                - IPC_LOCK
+            runAsUser: 0
+            runAsGroup: 0
+          
+          # Probes
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30  # 5 minutos para iniciar
+      
+      # Volumes
+      volumes:
+        # Persistent Volumes
+        - name: pnetlab-data
+          persistentVolumeClaim:
+            claimName: pnetlab-data
+        - name: pnetlab-labs
+          persistentVolumeClaim:
+            claimName: pnetlab-labs
+        - name: pnetlab-config
+          persistentVolumeClaim:
+            claimName: pnetlab-config
+        - name: pnetlab-tmp
+          persistentVolumeClaim:
+            claimName: pnetlab-tmp
+        
+        # Device mounts
+        - name: dev-kvm
+          hostPath:
+            path: /dev/kvm
+            type: CharDevice
+        - name: dev-net-tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+        
+        # Shared memory (importante para QEMU)
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+        
+        # Cgroups
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+            type: Directory
+      
+      # DNS Config
+      dnsPolicy: ClusterFirst
+      
+      # Restart policy
+      restartPolicy: Always
+      
+      # Termination grace period (labs podem demorar para parar)
+      terminationGracePeriodSeconds: 120
